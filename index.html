@@ -1,4 +1,4 @@
-<!-- build: 1778842394 -->
+<!-- build: 1778846322 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -489,9 +489,10 @@ function App() {
   }, []);
   useEffect(() => {
     if (!teslaMode) return;
+    if (throttle === 0) return;
     const id = setInterval(() => setTeslaTick((t) => (t + 1) % 1e5), 90);
     return () => clearInterval(id);
-  }, [teslaMode]);
+  }, [teslaMode, throttle]);
   useEffect(() => {
     if (parkStartMs === null || parkEndMs !== null) return;
     const id = setInterval(() => setNowMs(Date.now()), 100);
@@ -939,12 +940,13 @@ function App() {
     success: "#7be495"
   };
   const carOutline = gameState === "parked" ? C.carParked : isBumping ? C.carBumping : C.car;
-  const ParkedCarSvg = ({ box, jx = 0, jy = 0, jr = 0, tesla = false, proxColor = null }) => {
+  const ParkedCarSvg = ({ box, jx = 0, jy = 0, jr = 0, js = 1, tesla = false, proxColor = null }) => {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
+    const xf = `translate(${jx} ${jy}) translate(${cx} ${cy}) scale(${js}) rotate(${jr}) translate(${-cx} ${-cy})`;
     if (tesla) {
       const c = proxColor || { stroke: "#b8c5d4", fill: "rgba(180,200,220,0.08)" };
-      return /* @__PURE__ */ React.createElement("g", { transform: `translate(${jx} ${jy}) rotate(${jr} ${cx} ${cy})` }, /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement("g", { transform: xf }, /* @__PURE__ */ React.createElement(
         "rect",
         {
           x: box.x,
@@ -969,7 +971,7 @@ function App() {
         }
       ));
     }
-    return /* @__PURE__ */ React.createElement("g", { transform: `translate(${jx} ${jy}) rotate(${jr} ${cx} ${cy})` }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("g", { transform: xf }, /* @__PURE__ */ React.createElement(
       "rect",
       {
         x: box.x,
@@ -1147,7 +1149,12 @@ function App() {
         opacity: 0.75 + teslaNoise(99) * 0.2
       }
     );
-  })(), gameState === "parked" && /* @__PURE__ */ React.createElement("circle", { cx: slot.x + slot.w / 2, cy: slot.y + slot.h / 2, r: 75, fill: "url(#successGrad)", className: "success-glow" }), /* @__PURE__ */ React.createElement("g", { transform: teslaMode ? `translate(${teslaNoise(41) * 2.5} ${teslaNoise(42) * 2.5}) rotate(${teslaNoise(43) * 1.8} ${slot.x + slot.w / 2} ${slot.y + slot.h / 2})` : void 0 }, /* @__PURE__ */ React.createElement(
+  })(), gameState === "parked" && /* @__PURE__ */ React.createElement("circle", { cx: slot.x + slot.w / 2, cy: slot.y + slot.h / 2, r: 75, fill: "url(#successGrad)", className: "success-glow" }), /* @__PURE__ */ React.createElement("g", { transform: teslaMode ? (() => {
+    const cx = slot.x + slot.w / 2;
+    const cy = slot.y + slot.h / 2;
+    const s = 1 + teslaNoise(44) * 0.05;
+    return `translate(${teslaNoise(41) * 2.5} ${teslaNoise(42) * 2.5}) translate(${cx} ${cy}) scale(${s}) rotate(${teslaNoise(43) * 1.8}) translate(${-cx} ${-cy})`;
+  })() : void 0 }, /* @__PURE__ */ React.createElement(
     "rect",
     {
       x: slot.x,
@@ -1181,7 +1188,8 @@ function App() {
       proxColor: teslaMode ? objColor(teslaDistCar1) : null,
       jx: teslaNoise(11) * 2.5,
       jy: teslaNoise(12) * 2.5,
-      jr: teslaNoise(13) * 2.5
+      jr: teslaNoise(13) * 2.5,
+      js: 1 + teslaNoise(14) * 0.05
     }
   ), !rearDeadEnd && /* @__PURE__ */ React.createElement(
     ParkedCarSvg,
@@ -1191,7 +1199,8 @@ function App() {
       proxColor: teslaMode ? objColor(teslaDistCar2) : null,
       jx: teslaNoise(21) * 2.5,
       jy: teslaNoise(22) * 2.5,
-      jr: teslaNoise(23) * 2.5
+      jr: teslaNoise(23) * 2.5,
+      js: 1 + teslaNoise(24) * 0.05
     }
   ), leftCars.map((c, i) => /* @__PURE__ */ React.createElement(
     ParkedCarSvg,
@@ -1202,7 +1211,8 @@ function App() {
       proxColor: teslaMode ? objColor(teslaDistLeftArr[i]) : null,
       jx: teslaNoise(31 + i * 10) * 2.5,
       jy: teslaNoise(32 + i * 10) * 2.5,
-      jr: teslaNoise(33 + i * 10) * 2.5
+      jr: teslaNoise(33 + i * 10) * 2.5,
+      js: 1 + teslaNoise(34 + i * 10) * 0.05
     }
   )), deadEndAabb && /* @__PURE__ */ React.createElement("g", null, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement("pattern", { id: "wallHatch", patternUnits: "userSpaceOnUse", width: "10", height: "10", patternTransform: "rotate(45)" }, /* @__PURE__ */ React.createElement("rect", { width: "10", height: "10", fill: "#2a1d0e" }), /* @__PURE__ */ React.createElement("rect", { width: "5", height: "10", fill: "#ff8833" }))), /* @__PURE__ */ React.createElement(
     "rect",
@@ -1307,7 +1317,12 @@ function App() {
       stroke: C.radius,
       strokeWidth: "1.3"
     }
-  ), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "28", fill: "url(#centerGlow)" }), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "6", fill: "none", stroke: C.center, strokeWidth: "1.2", className: "pulse" }), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "2.5", fill: C.center })), /* @__PURE__ */ React.createElement("g", null, /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "28", fill: "url(#centerGlow)" }), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "6", fill: "none", stroke: C.center, strokeWidth: "1.2", className: "pulse" }), /* @__PURE__ */ React.createElement("circle", { cx: centerX, cy: centerY, r: "2.5", fill: C.center })), /* @__PURE__ */ React.createElement("g", { transform: teslaMode ? (() => {
+    const pcx = (playerCorners[0].x + playerCorners[2].x) / 2;
+    const pcy = (playerCorners[0].y + playerCorners[2].y) / 2;
+    const ps = 1 + teslaNoise(51) * 0.05;
+    return `translate(${pcx} ${pcy}) scale(${ps}) translate(${-pcx} ${-pcy})`;
+  })() : void 0 }, /* @__PURE__ */ React.createElement(
     "polygon",
     {
       points: playerCorners.map((p) => `${p.x},${p.y}`).join(" "),
