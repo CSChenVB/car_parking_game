@@ -1,4 +1,4 @@
-<!-- build: 1778846322 -->
+<!-- build: 1780135704 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -21,9 +21,7 @@
   </style>
 </head>
 <body>
-  <div id="root">
-    <div class="loader">Loading<span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-  </div>
+  <div id="root"><div class="loader">Loading<span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>
   <script>
 /**
  * @license React
@@ -327,8 +325,180 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 
 const { useState, useEffect, useRef, useCallback } = React;
 
+function MirrorView({ pose, obstacles, slot, curbX, svgW, svgH, steering = 0 }) {
+  const SKY1 = "#13243f", SKY2 = "#0a0f1a";
+  const GND1 = "#26334a", GND2 = "#131b27";
+  const CURB = "#6f7d91", CURBTOP = "#9fadbf";
+  const CAR = "#3a526f", CARTOP = "#5a779b";
+  const WALL = "#8a5a22", WALLTOP = "#b87a30";
+  const SLOT = "#3fb96b", FRAME = "#04070e", HAZE = "#0c1322";
+  const hr = pose.heading * Math.PI / 180;
+  const fx = Math.cos(hr), fy = Math.sin(hr);
+  const eyeX = pose.x + fx * 26;
+  const eyeY = pose.y + fy * 26;
+  const EYE_H = 22, CAR_H = 18, WALL_H = 48, CURB_H = 5;
+  const project = (wx, wy, objH, cam) => {
+    const dr = cam.dir * Math.PI / 180;
+    const dx = wx - eyeX, dy = wy - eyeY;
+    const fwd = dx * Math.cos(dr) + dy * Math.sin(dr);
+    const rt = -dx * Math.sin(dr) + dy * Math.cos(dr);
+    if (fwd <= 2) return null;
+    return {
+      x: cam.cx + rt / fwd * cam.focal,
+      y: cam.hy + (EYE_H - objH) / fwd * cam.focal,
+      fwd
+    };
+  };
+  const boxFaces = (box, cam, height, baseCol, topCol) => {
+    const cs = [
+      [box.x, box.y],
+      [box.x + box.w, box.y],
+      [box.x + box.w, box.y + box.h],
+      [box.x, box.y + box.h]
+    ];
+    const g = cs.map(([x, y]) => project(x, y, 0, cam));
+    const t = cs.map(([x, y]) => project(x, y, height, cam));
+    if (g.some((p) => !p) || t.some((p) => !p)) return [];
+    const faces = [];
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      faces.push({ pts: [g[i], g[j], t[j], t[i]], depth: (g[i].fwd + g[j].fwd) / 2, col: baseCol, k: 0.72 });
+    }
+    faces.push({ pts: t, depth: Math.min(...t.map((p) => p.fwd)), col: topCol, k: 1 });
+    return faces;
+  };
+  const polyStr = (pts) => pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const Viewport = ({ id, x, y, w, h, dir, focal, hozFrac, mirrored, label, frameW = 3, round = 4 }) => {
+    const cam = { dir, focal, cx: w / 2, hy: h * hozFrac };
+    const faces = [];
+    for (const o of obstacles) {
+      const isWall = o.type === "wall";
+      faces.push(...boxFaces(
+        o.box,
+        cam,
+        isWall ? WALL_H : CAR_H,
+        isWall ? WALL : CAR,
+        isWall ? WALLTOP : CARTOP
+      ));
+    }
+    for (let yy = eyeY - 360; yy < eyeY + 360; yy += 18) {
+      faces.push(...boxFaces({ x: curbX, y: yy, w: 5, h: 18 }, cam, CURB_H, CURB, CURBTOP));
+    }
+    const slotG = [
+      [slot.x, slot.y],
+      [slot.x + slot.w, slot.y],
+      [slot.x + slot.w, slot.y + slot.h],
+      [slot.x, slot.y + slot.h]
+    ].map(([sx, sy]) => project(sx, sy, 0.5, cam));
+    const slotOk = slotG.every((p) => p);
+    faces.sort((a, b) => b.depth - a.depth);
+    const clipId = `mv-clip-${id}`;
+    return /* @__PURE__ */ React.createElement("g", null, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement("clipPath", { id: clipId }, /* @__PURE__ */ React.createElement("rect", { x, y, width: w, height: h, rx: round })), /* @__PURE__ */ React.createElement("linearGradient", { id: `mv-sky-${id}`, x1: "0", y1: "0", x2: "0", y2: "1" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: SKY1 }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: SKY2 })), /* @__PURE__ */ React.createElement("linearGradient", { id: `mv-gnd-${id}`, x1: "0", y1: "0", x2: "0", y2: "1" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: GND2 }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: GND1 }))), /* @__PURE__ */ React.createElement("g", { clipPath: `url(#${clipId})` }, /* @__PURE__ */ React.createElement("g", { transform: `translate(${x} ${y})${mirrored ? ` translate(${w} 0) scale(-1 1)` : ""}` }, /* @__PURE__ */ React.createElement("rect", { x: 0, y: 0, width: w, height: cam.hy, fill: `url(#mv-sky-${id})` }), /* @__PURE__ */ React.createElement("rect", { x: 0, y: cam.hy, width: w, height: h - cam.hy, fill: `url(#mv-gnd-${id})` }), /* @__PURE__ */ React.createElement("rect", { x: 0, y: cam.hy - 5, width: w, height: 10, fill: HAZE, opacity: "0.55" }), slotOk && /* @__PURE__ */ React.createElement(
+      "polygon",
+      {
+        points: polyStr(slotG),
+        fill: "rgba(63,185,107,0.12)",
+        stroke: SLOT,
+        strokeWidth: "1.5",
+        strokeDasharray: "5 3"
+      }
+    ), faces.map((f, i) => /* @__PURE__ */ React.createElement(
+      "polygon",
+      {
+        key: i,
+        points: polyStr(f.pts),
+        fill: f.col,
+        stroke: "rgba(0,0,0,0.35)",
+        strokeWidth: "0.4",
+        opacity: f.k
+      }
+    )))), /* @__PURE__ */ React.createElement("rect", { x, y, width: w, height: h, rx: round, fill: "none", stroke: FRAME, strokeWidth: frameW }), /* @__PURE__ */ React.createElement(
+      "rect",
+      {
+        x: x + frameW / 2,
+        y: y + frameW / 2,
+        width: w - frameW,
+        height: h - frameW,
+        rx: Math.max(0, round - 1),
+        fill: "none",
+        stroke: "rgba(255,255,255,0.06)",
+        strokeWidth: "1"
+      }
+    ), label && /* @__PURE__ */ React.createElement(
+      "text",
+      {
+        x: x + 5,
+        y: y + 11,
+        fontSize: "7",
+        fill: "rgba(200,215,235,0.5)",
+        fontFamily: "ui-monospace, monospace",
+        letterSpacing: "0.08em"
+      },
+      label
+    ));
+  };
+  return /* @__PURE__ */ React.createElement("svg", { viewBox: `0 0 ${svgW} ${svgH}`, style: { width: "100%", height: "100%", display: "block" } }, /* @__PURE__ */ React.createElement("rect", { x: 0, y: 0, width: svgW, height: svgH, fill: "#04070e" }), /* @__PURE__ */ React.createElement(
+    Viewport,
+    {
+      id: "ws",
+      x: 8,
+      y: 20,
+      w: svgW - 16,
+      h: svgH - 92,
+      dir: pose.heading,
+      focal: (svgW - 16) * 0.52,
+      hozFrac: 0.44,
+      mirrored: false,
+      frameW: 4,
+      round: 8,
+      label: "\u64CB\u98A8\u73BB\u7483 \xB7 WINDSHIELD"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    Viewport,
+    {
+      id: "rv",
+      x: svgW / 2 - 72,
+      y: 6,
+      w: 144,
+      h: 40,
+      dir: pose.heading + 180,
+      focal: 144 * 0.8,
+      hozFrac: 0.5,
+      mirrored: true,
+      label: "\u5F8C\u8996\u93E1"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    Viewport,
+    {
+      id: "lm",
+      x: 6,
+      y: svgH - 150,
+      w: 92,
+      h: 84,
+      dir: pose.heading + 215,
+      focal: 92 * 0.78,
+      hozFrac: 0.46,
+      mirrored: true,
+      label: "\u5DE6"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    Viewport,
+    {
+      id: "rm",
+      x: svgW - 98,
+      y: svgH - 150,
+      w: 92,
+      h: 84,
+      dir: pose.heading + 145,
+      focal: 92 * 0.78,
+      hozFrac: 0.46,
+      mirrored: true,
+      label: "\u53F3"
+    }
+  ), /* @__PURE__ */ React.createElement("rect", { x: 0, y: svgH - 64, width: svgW, height: 64, fill: "#080d16" }), /* @__PURE__ */ React.createElement("rect", { x: 0, y: svgH - 64, width: svgW, height: 2, fill: "rgba(255,255,255,0.05)" }), /* @__PURE__ */ React.createElement("g", { transform: `translate(${svgW / 2} ${svgH - 28}) rotate(${steering})` }, /* @__PURE__ */ React.createElement("circle", { r: "16", fill: "none", stroke: "#46586f", strokeWidth: "3" }), /* @__PURE__ */ React.createElement("line", { x1: "-16", y1: "0", x2: "16", y2: "0", stroke: "#46586f", strokeWidth: "2.5" }), /* @__PURE__ */ React.createElement("line", { x1: "0", y1: "0", x2: "0", y2: "16", stroke: "#46586f", strokeWidth: "2.5" }), /* @__PURE__ */ React.createElement("circle", { r: "3", fill: "#46586f" })));
+}
 function App() {
-  var _a;
+  var _a, _b;
   const svgW = 400;
   const svgH = 400;
   const curbX = 320;
@@ -357,28 +527,35 @@ function App() {
     };
   }, []);
   const LEVELS = [
-    { n: 1, label: "\u57FA\u672C", en: "Basic", desc: "\u5BEC\u8DEF \xB7 \u7121\u5DE6\u8ECA", slot: 125, leftCarX: null, startX: 200, startY: 105, minCars: 0, maxCars: 0, hasDeadEnd: false },
-    { n: 2, label: "\u7A84\u5DF7", en: "Narrow", desc: "5m \u884C\u8ECA\u9053", slot: 125, leftCarX: 120, startX: 220, startY: 105, minCars: 1, maxCars: 3, hasDeadEnd: false },
-    { n: 3, label: "\u7DCA\u6E4A", en: "Tight", desc: "\u5C0F\u8ECA\u683C + \u4E09\u53F0", slot: 115, leftCarX: 125, startX: 222, startY: 105, minCars: 3, maxCars: 3, hasDeadEnd: false },
-    { n: 4, label: "\u5927\u5E2B", en: "Master", desc: "\u6975\u7A84 + \u6B7B\u5DF7", slot: 108, leftCarX: 130, startX: 225, startY: 130, minCars: 2, maxCars: 3, hasDeadEnd: true }
+    { n: 1, label: "\u57FA\u672C", en: "Basic", desc: "\u5BEC\u8DEF \xB7 \u7121\u969C\u7919", slot: 125, slotW: 58, leftCarX: null, leftWallX: null, startX: 228, startY: 105, minCars: 0, maxCars: 0, hasDeadEnd: false },
+    { n: 2, label: "\u591A\u8ECA", en: "Traffic", desc: "\u5DE6\u5074\u4E09\u53F0\u8ECA", slot: 115, slotW: 52, leftCarX: 125, leftWallX: null, startX: 238, startY: 105, minCars: 3, maxCars: 3, hasDeadEnd: false },
+    { n: 3, label: "\u7A84\u5DF7", en: "Alley", desc: "\u5DE6\u5074\u4E00\u9053\u7246", slot: 113, slotW: 54, leftCarX: null, leftWallX: 186, startX: 236, startY: 105, minCars: 0, maxCars: 0, hasDeadEnd: false },
+    { n: 4, label: "\u5927\u5E2B", en: "Master", desc: "\u6975\u7A84 + \u6B7B\u5DF7", slot: 108, slotW: 50, leftCarX: 130, leftWallX: null, startX: 238, startY: 130, minCars: 2, maxCars: 3, hasDeadEnd: true }
   ];
   const MAX_LEVEL = LEVELS.length;
   const LEVEL_PASS_MS = 60 * 1e3;
   const [level, setLevel] = useState(1);
   const [pendingLevelUp, setPendingLevelUp] = useState(false);
   const currentLevel = LEVELS[level - 1] || LEVELS[0];
+  const slotW = (_a = currentLevel.slotW) != null ? _a : 58;
   const narrowRoad = currentLevel.leftCarX !== null;
-  const leftCarBaseX = (_a = currentLevel.leftCarX) != null ? _a : 100;
+  const leftCarBaseX = (_b = currentLevel.leftCarX) != null ? _b : 100;
   useEffect(() => {
     setSlotLength(currentLevel.slot);
     setStartX(currentLevel.startX);
   }, [level]);
   const [startJitter, setStartJitter] = useState({ dx: 0, dy: 0, dh: 0 });
-  const totalScene = parkedH + slotLength + parkedH;
+  const bayH = slotLength;
+  const totalScene = bayH * 3;
   const topMargin = Math.max(8, (svgH - totalScene) / 2);
-  const parkedCar1 = { x: curbX - parkedW, y: topMargin, w: parkedW, h: parkedH };
-  const slot = { x: curbX - parkedW, y: topMargin + parkedH, w: parkedW, h: slotLength };
-  const parkedCar2 = { x: curbX - parkedW, y: topMargin + parkedH + slotLength, w: parkedW, h: parkedH };
+  const bayLeft = curbX - slotW;
+  const carInsetX = (slotW - parkedW) / 2;
+  const carInsetY = (bayH - parkedH) / 2;
+  const frontBay = { x: bayLeft, y: topMargin, w: slotW, h: bayH };
+  const slot = { x: bayLeft, y: topMargin + bayH, w: slotW, h: bayH };
+  const rearBay = { x: bayLeft, y: topMargin + bayH * 2, w: slotW, h: bayH };
+  const parkedCar1 = { x: bayLeft + carInsetX, y: frontBay.y + carInsetY, w: parkedW, h: parkedH };
+  const parkedCar2 = { x: bayLeft + carInsetX, y: rearBay.y + carInsetY, w: parkedW, h: parkedH };
   const defaultLeftCars = narrowRoad ? [
     { x: leftCarBaseX, y: parkedCar1.y + 15, w: 50, h: parkedH },
     { x: leftCarBaseX, y: parkedCar2.y - 15, w: 50, h: parkedH }
@@ -398,6 +575,7 @@ function App() {
     }
     return null;
   })();
+  const leftWallAabb = currentLevel.leftWallX != null ? { x: 2, y: 2, w: currentLevel.leftWallX - 2, h: svgH - 4 } : null;
   useEffect(() => {
     var _a2;
     if (currentLevel.hasDeadEnd && deadEndPos === "front") {
@@ -418,9 +596,9 @@ function App() {
   const wheelLen = 14;
   const wheelWid = 5;
   const generateLeftCars = () => {
-    var _a2, _b;
+    var _a2, _b2;
     const min = (_a2 = currentLevel.minCars) != null ? _a2 : 1;
-    const max = (_b = currentLevel.maxCars) != null ? _b : 3;
+    const max = (_b2 = currentLevel.maxCars) != null ? _b2 : 3;
     if (max <= 0) return [];
     const numCars = min + Math.floor(Math.random() * (max - min + 1));
     const cars = [];
@@ -469,6 +647,7 @@ function App() {
   const [isBumping, setIsBumping] = useState(false);
   const [showGeometry, setShowGeometry] = useState(false);
   const [teslaMode, setTeslaMode] = useState(false);
+  const [mirrorMode, setMirrorMode] = useState(false);
   const [teslaTick, setTeslaTick] = useState(0);
   const [parkStartMs, setParkStartMs] = useState(null);
   const [parkEndMs, setParkEndMs] = useState(null);
@@ -591,7 +770,10 @@ function App() {
   const rawDistCar2 = distObbAabb(playerCorners, parkedCar2);
   const rawDistCurb = distObbAabb(playerCorners, curbAabb);
   const rawDistLeftArr = leftCars.map((c) => distObbAabb(playerCorners, c));
-  const rawDistWall = deadEndAabb ? distObbAabb(playerCorners, deadEndAabb) : Infinity;
+  const rawDistWall = Math.min(
+    deadEndAabb ? distObbAabb(playerCorners, deadEndAabb) : Infinity,
+    leftWallAabb ? distObbAabb(playerCorners, leftWallAabb) : Infinity
+  );
   const noisify = (d, seed) => {
     if (!teslaMode) return d;
     const n = teslaNoise(seed);
@@ -645,7 +827,8 @@ function App() {
     ...rearDeadEnd ? [] : [parkedCar2],
     ...leftCars,
     curbAabb,
-    ...deadEndAabb ? [deadEndAabb] : []
+    ...deadEndAabb ? [deadEndAabb] : [],
+    ...leftWallAabb ? [leftWallAabb] : []
   ];
   const sensorDist = (worldPt) => {
     let m = Infinity;
@@ -705,6 +888,7 @@ function App() {
       if (polysOverlap(corners, aabbToPoly(c))) return "car";
     }
     if (deadEndAabb && polysOverlap(corners, aabbToPoly(deadEndAabb))) return "wall";
+    if (leftWallAabb && polysOverlap(corners, aabbToPoly(leftWallAabb))) return "wall";
     for (const c of corners) {
       if (c.x > curbX) return "curb";
       if (c.x < 3 || c.y < 3 || c.y > svgH - 3) return "edge";
@@ -802,7 +986,9 @@ function App() {
   useEffect(() => {
     const j = randomizeStart ? { dx: (Math.random() - 0.5) * 30, dy: (Math.random() - 0.5) * 20, dh: (Math.random() - 0.5) * 6 } : { dx: 0, dy: 0, dh: 0 };
     setStartJitter(j);
-    setPose({ x: startX + j.dx, y: startY + j.dy, heading: -90 + j.dh });
+    const spawnXMax = parkedCar1.x - carWid / 2 - 6;
+    const spawnXMin = leftWallAabb ? leftWallAabb.x + leftWallAabb.w + carWid / 2 + 6 : -Infinity;
+    setPose({ x: Math.max(spawnXMin, Math.min(startX + j.dx, spawnXMax)), y: startY + j.dy, heading: -90 + j.dh });
     setSteeringDeg(0);
     pedalsRef.current = { D: false, R: false };
     setThrottle(0);
@@ -900,7 +1086,9 @@ function App() {
     setPendingLevelUp(false);
     const j = randomizeStart ? { dx: (Math.random() - 0.5) * 30, dy: (Math.random() - 0.5) * 20, dh: (Math.random() - 0.5) * 6 } : { dx: 0, dy: 0, dh: 0 };
     setStartJitter(j);
-    setPose({ x: startX + j.dx, y: startY + j.dy, heading: -90 + j.dh });
+    const spawnXMax2 = parkedCar1.x - carWid / 2 - 6;
+    const spawnXMin2 = leftWallAabb ? leftWallAabb.x + leftWallAabb.w + carWid / 2 + 6 : -Infinity;
+    setPose({ x: Math.max(spawnXMin2, Math.min(startX + j.dx, spawnXMax2)), y: startY + j.dy, heading: -90 + j.dh });
     setSteeringDeg(0);
     pedalsRef.current = { D: false, R: false };
     setThrottle(0);
@@ -1130,7 +1318,24 @@ function App() {
       maxWidth: "100%",
       justifySelf: "start"
     } : {}
-  } }, /* @__PURE__ */ React.createElement("svg", { viewBox: `0 0 ${svgW} ${svgH}`, style: { width: "100%", height: "auto", display: "block" } }, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement("pattern", { id: "sidewalkPat", width: "12", height: "12", patternUnits: "userSpaceOnUse" }, /* @__PURE__ */ React.createElement("rect", { width: "12", height: "12", fill: C.sidewalk }), /* @__PURE__ */ React.createElement("path", { d: "M 0 12 L 12 0", stroke: C.sidewalkPattern, strokeWidth: "0.5", opacity: "0.5" })), /* @__PURE__ */ React.createElement("radialGradient", { id: "centerGlow", cx: "0.5", cy: "0.5", r: "0.5" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: C.center, stopOpacity: "0.6" }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: C.center, stopOpacity: "0" })), /* @__PURE__ */ React.createElement("radialGradient", { id: "successGrad", cx: "0.5", cy: "0.5", r: "0.6" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: C.success, stopOpacity: "0.35" }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: C.success, stopOpacity: "0" }))), /* @__PURE__ */ React.createElement("rect", { width: svgW, height: svgH, fill: teslaMode ? "#04060c" : C.road }), !teslaMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("line", { x1: 45, y1: 0, x2: 45, y2: svgH, stroke: C.roadLine, strokeWidth: "1", strokeDasharray: "12 10", opacity: "0.5" }), /* @__PURE__ */ React.createElement("rect", { x: curbX, y: 0, width: svgW - curbX, height: svgH, fill: "url(#sidewalkPat)" }), /* @__PURE__ */ React.createElement("line", { x1: curbX, y1: 0, x2: curbX, y2: svgH, stroke: C.curb, strokeWidth: "2.2" }), /* @__PURE__ */ React.createElement("line", { x1: curbX + 1.4, y1: 0, x2: curbX + 1.4, y2: svgH, stroke: "rgba(0,0,0,0.4)", strokeWidth: "0.9" })), teslaMode && (() => {
+  } }, mirrorMode ? /* @__PURE__ */ React.createElement(
+    MirrorView,
+    {
+      pose,
+      obstacles: [
+        ...frontDeadEnd ? [] : [{ box: parkedCar1, type: "car" }],
+        ...rearDeadEnd ? [] : [{ box: parkedCar2, type: "car" }],
+        ...leftCars.map((c) => ({ box: c, type: "car" })),
+        ...deadEndAabb ? [{ box: deadEndAabb, type: "wall" }] : [],
+        ...leftWallAabb ? [{ box: leftWallAabb, type: "wall" }] : []
+      ],
+      slot,
+      curbX,
+      svgW,
+      svgH,
+      steering: wheelRotation
+    }
+  ) : /* @__PURE__ */ React.createElement("svg", { viewBox: `0 0 ${svgW} ${svgH}`, style: { width: "100%", height: "auto", display: "block" } }, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement("pattern", { id: "sidewalkPat", width: "12", height: "12", patternUnits: "userSpaceOnUse" }, /* @__PURE__ */ React.createElement("rect", { width: "12", height: "12", fill: C.sidewalk }), /* @__PURE__ */ React.createElement("path", { d: "M 0 12 L 12 0", stroke: C.sidewalkPattern, strokeWidth: "0.5", opacity: "0.5" })), /* @__PURE__ */ React.createElement("radialGradient", { id: "centerGlow", cx: "0.5", cy: "0.5", r: "0.5" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: C.center, stopOpacity: "0.6" }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: C.center, stopOpacity: "0" })), /* @__PURE__ */ React.createElement("radialGradient", { id: "successGrad", cx: "0.5", cy: "0.5", r: "0.6" }, /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: C.success, stopOpacity: "0.35" }), /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: C.success, stopOpacity: "0" }))), /* @__PURE__ */ React.createElement("rect", { width: svgW, height: svgH, fill: teslaMode ? "#04060c" : C.road }), !teslaMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("line", { x1: 45, y1: 0, x2: 45, y2: svgH, stroke: C.roadLine, strokeWidth: "1", strokeDasharray: "12 10", opacity: "0.5" }), /* @__PURE__ */ React.createElement("rect", { x: curbX, y: 0, width: svgW - curbX, height: svgH, fill: "url(#sidewalkPat)" }), /* @__PURE__ */ React.createElement("line", { x1: curbX, y1: 0, x2: curbX, y2: svgH, stroke: C.curb, strokeWidth: "2.2" }), /* @__PURE__ */ React.createElement("line", { x1: curbX + 1.4, y1: 0, x2: curbX + 1.4, y2: svgH, stroke: "rgba(0,0,0,0.4)", strokeWidth: "0.9" })), teslaMode && (() => {
     const curbColor = objColor(teslaDistCurb);
     const pts = [];
     const seg = 14;
@@ -1181,6 +1386,32 @@ function App() {
     },
     "P"
   )), !frontDeadEnd && /* @__PURE__ */ React.createElement(
+    "rect",
+    {
+      x: frontBay.x,
+      y: frontBay.y,
+      width: frontBay.w,
+      height: frontBay.h,
+      fill: "none",
+      stroke: "rgba(190,205,225,0.22)",
+      strokeWidth: "1.2",
+      strokeDasharray: "5 4",
+      rx: "2"
+    }
+  ), !rearDeadEnd && /* @__PURE__ */ React.createElement(
+    "rect",
+    {
+      x: rearBay.x,
+      y: rearBay.y,
+      width: rearBay.w,
+      height: rearBay.h,
+      fill: "none",
+      stroke: "rgba(190,205,225,0.22)",
+      strokeWidth: "1.2",
+      strokeDasharray: "5 4",
+      rx: "2"
+    }
+  ), !frontDeadEnd && /* @__PURE__ */ React.createElement(
     ParkedCarSvg,
     {
       box: parkedCar1,
@@ -1253,6 +1484,47 @@ function App() {
       style: { paintOrder: "stroke", stroke: "#ffd147", strokeWidth: 2.5 }
     },
     "\u6B7B\u5DF7"
+  )), leftWallAabb && /* @__PURE__ */ React.createElement("g", null, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement("pattern", { id: "brickPat", patternUnits: "userSpaceOnUse", width: "20", height: "14" }, /* @__PURE__ */ React.createElement("rect", { width: "20", height: "14", fill: "#3a4150" }), /* @__PURE__ */ React.createElement("rect", { width: "20", height: "13", fill: "#434b5c" }), /* @__PURE__ */ React.createElement("line", { x1: "0", y1: "13", x2: "20", y2: "13", stroke: "#2a303c", strokeWidth: "1" }), /* @__PURE__ */ React.createElement("line", { x1: "10", y1: "0", x2: "10", y2: "7", stroke: "#2a303c", strokeWidth: "1" }), /* @__PURE__ */ React.createElement("line", { x1: "0", y1: "7", x2: "20", y2: "7", stroke: "#2a303c", strokeWidth: "1" }), /* @__PURE__ */ React.createElement("line", { x1: "0", y1: "0", x2: "0", y2: "7", stroke: "#2a303c", strokeWidth: "1" }))), /* @__PURE__ */ React.createElement(
+    "rect",
+    {
+      x: leftWallAabb.x,
+      y: leftWallAabb.y,
+      width: leftWallAabb.w,
+      height: leftWallAabb.h,
+      fill: "url(#brickPat)"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "rect",
+    {
+      x: leftWallAabb.x + leftWallAabb.w - 3,
+      y: leftWallAabb.y,
+      width: 3,
+      height: leftWallAabb.h,
+      fill: "#5b657a"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "line",
+    {
+      x1: leftWallAabb.x + leftWallAabb.w,
+      y1: leftWallAabb.y,
+      x2: leftWallAabb.x + leftWallAabb.w,
+      y2: leftWallAabb.y + leftWallAabb.h,
+      stroke: "#1c2129",
+      strokeWidth: "1.5"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "text",
+    {
+      x: leftWallAabb.x + leftWallAabb.w / 2,
+      y: svgH / 2,
+      textAnchor: "middle",
+      className: "serif",
+      fontSize: "13",
+      fontWeight: "700",
+      fill: "rgba(255,255,255,0.18)",
+      transform: `rotate(-90 ${leftWallAabb.x + leftWallAabb.w / 2} ${svgH / 2})`
+    },
+    "\u570D\u7246 \xB7 WALL"
   )), settingsOpen && (Math.abs(pose.x - startX) > 1 || Math.abs(pose.y - startY) > 1) && /* @__PURE__ */ React.createElement("g", { opacity: "0.4", pointerEvents: "none" }, /* @__PURE__ */ React.createElement(
     "polygon",
     {
@@ -1763,6 +2035,25 @@ function App() {
       }
     },
     "Tesla"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "btn",
+      type: "button",
+      onClick: () => setMirrorMode((v) => !v),
+      style: {
+        flex: 1,
+        background: mirrorMode ? `${C.accent}1c` : "transparent",
+        color: mirrorMode ? C.accent : C.text,
+        border: `1px solid ${mirrorMode ? C.accent : C.roadLine}`,
+        borderRadius: 5,
+        padding: "8px",
+        fontSize: 11,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase"
+      }
+    },
+    "\u{1FA9E} Mirror"
   )), !settingsOpen && /* @__PURE__ */ React.createElement(
     "button",
     {
